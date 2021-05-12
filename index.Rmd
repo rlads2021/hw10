@@ -116,7 +116,7 @@ LSA Dimensions & Classification (60 分)
     - `$test_acc`: 測試資料預測準確率
     - `$nd`: LSA 降維之維度
     
-```{r eval=FALSE, include=FALSE}
+    ```{r eval=FALSE}
     source("svc.R")
     docs_df <- readRDS("samesex_marriage.rds")
     
