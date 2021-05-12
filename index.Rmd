@@ -1,0 +1,191 @@
+---
+author: "未命名 B01201001 一般系"
+title: "HW 10: 向量表徵"
+date: |
+  | 2021-05-13
+  |
+  | [Rmd Source (for TAs)](./index.Rmd){download='`r basename(getwd())`.Rmd'}
+output:
+  html_document:
+    number_sections: yes
+    highlight: tango
+    toc: yes
+    toc_float:
+      collapsed: no
+    css: style.css
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,comment = '#>',error=TRUE, results = 'hold', out.width='70%', fig.align = 'center', message = FALSE)
+```
+
+
+Encoding New Documents (60 分)
+==============================
+
+```{r}
+library(quanteda)
+library(quanteda.textstats)
+library(jiebaR)
+
+# Document-term matrix 
+q_dfm <- readRDS("samesex_marriage.rds") %>%
+  corpus(docid_field = "id", text_field = "content") %>%
+  tokenizers::tokenize_regex(pattern = "\u3000") %>%
+  tokens() %>%
+  dfm() %>% 
+  dfm_remove(pattern = readLines("stopwords.txt", encoding = "UTF-8"), 
+             valuetype = "fixed") %>%
+  dfm_select(pattern = "[\u4E00-\u9FFF]", valuetype = "regex") %>%
+  dfm_trim(min_termfreq = 5) %>%
+  dfm_tfidf()
+
+# LSA Model
+lsa_model <- quanteda.textmodels::textmodel_lsa(q_dfm, nd = 15)
+
+###### Convert New document to vector #######
+# New document
+doc <- readLines("sample_post.txt", encoding = "UTF-8") %>% 
+  paste(collapse = "\n")
+
+# Convert raw text to document term matrix
+seg <- worker(user = "user_dict.txt")
+new_doc_dtm <- list(segment(doc, seg)) %>%
+  tokens() %>%
+  dfm() %>%
+  dfm_match(features = featnames(q_dfm))
+
+# Dimensionality reduction with LSA
+p <- predict(lsa_model, newdata = new_doc_dtm)
+p$docs_newspace
+```
+
+上方的程式碼是實習課上用來將新文本 (i.e., 不在語料庫內的文本) 轉換成向量的程式碼，目的是讓新的文本也能與語料庫內的文本進行比較 (透過向量運算)。
+
+在這題，你的任務是將上方程式碼的後半部包成一個函數 `encode_document()`，用來將傳入的文本 (可有多篇) 轉換成向量表徵。
+
+要求：
+
+1. `encode_document()` 需有 3 個參數，依序為：
+    - `docs`: character vector。每個元素為一篇 (未斷詞的) 文本。
+    - `dtm`: 語料庫所製作出來的 document-term matrix。例如，上方程式碼的 `q_dfm`
+    - `lsa`: 使用 `dtm` 進行降維所得到的 LSA Model。例如，上方程式碼的 `lsa_model`
+
+2. `encode_document()` 的回傳值為一個矩陣 (`"dgeMatrix"`)，其列數 (nrow) 等同於 `docs` 的長度 (文本數)，行數 (ncol) 為 `lsa_model` 設置的維度 `nd`。矩陣的第一個 row vector 對應到 `docs` 的第一個元素，第二個 row vector 對應到 `docs` 的第二個元素，依此類推。
+
+```{r}
+seg <- worker(user = "user_dict.txt", bylines = T)
+
+encode_document <- function(docs, dtm, lsa) {
+  # Write your code here
+}
+
+#### Do not modify the code below ####
+doc1 <- paste(readLines("sample_post.txt", encoding = "UTF-8"), collapse = "\n")
+doc2 <- paste(readLines("sample_post2.txt", encoding = "UTF-8"), collapse = "\n")
+encode_document(docs = c(doc1, doc2), dtm = q_dfm, lsa = lsa_model)
+# Should print out:
+#> 2 x 15 Matrix of class "dgeMatrix"
+#>             [,1]         [,2]       [,3]       [,4]        [,5]       [,6]
+#> text1 0.01081012 -0.005191709 0.01922754 0.02134009 -0.01273625 0.01767904
+#> text2 0.04201897 -0.009098392 0.04628094 0.05004067 -0.02965790 0.03312940
+#>             [,7]       [,8]        [,9]        [,10]       [,11]       [,12]
+#> text1 0.03064613 0.02521167 -0.01076239 -0.005173429 -0.03417668 0.005167776
+#> text2 0.06335756 0.03454564  0.01655027  0.002897639 -0.01288395 0.033385790
+#>             [,13]        [,14]       [,15]
+#> text1 -0.01535199 -0.007155702 0.002363518
+#> text2 -0.01192836  0.023900186 0.004258347
+```
+
+
+
+LSA Dimensions & Classification (60 分)
+=======================================
+
+`svc.R` 內的函數 `svm_classifer_train()` 是一個簡單的機器學習分類模型訓練函數[^svm]，用來訓練出能預測文本是來自於下福盟 (`anti`) 或伴侶盟 (`pro`) 的模型。
+
+1. `svm_classifer_train()` 有三個參數：
+    - `docs_df`: Document data frame。在此我們使用 `samesex_marriage.rds`
+    - `dtm`: 由 `docs_df` 的語料製作而成的 document term matrix。
+             在此我們使用上方的 `q_dfm`
+    - `nd`: LSA 模型設置的維度 `nd`。在此我們使用 `15`
+
+2. `svm_classifer_train()` 回傳的是一個 list，裡面有 4 個元素 (見下方範例)：
+    - `$model`: 分類器模型
+    - `$train_acc`: 訓練資料預測準確率 
+    - `$test_acc`: 測試資料預測準確率
+    - `$nd`: LSA 降維之維度
+    
+```{r eval=FALSE, include=FALSE}
+    source("svc.R")
+    docs_df <- readRDS("samesex_marriage.rds")
+    
+    # Train and return classifier
+    m <- svm_classifer_train(docs_df = docs_df, dtm = q_dfm, nd = 5)
+    
+    # Print model's prediction accuracy
+    cat("Test acc.:", m$test_acc, '\n\n')
+    
+    # Classifying new (unseen) documents with the model
+    docs_vec <- encode_document(c(doc1, doc2), q_dfm, lsa_model) %>%
+        as.matrix() %>%
+        as.data.frame()
+    cat("======= Predict new documents ========\n")
+    predict(m$model, newdata = docs_vec)
+    
+    # Should print out:
+    #> ======== Model Performance: nd = 5 ========
+    #> Train accuracy: 0.7333   Test accuracy: 0.65
+    #> 
+    #> Test acc.: 0.65 
+    #> 
+    #> ======= Predict new documents ========
+    #> text1 text2 
+    #>   pro  anti 
+    #> Levels: anti pro
+    ```
+
+
+在這題，你的任務是去檢視**透過 LSA 降維時，不同的維度設定對於分類器表現的影響**。請試試 `nd` 為 10, 25, 50, 75 之中的何者時，分類器的表現 (`test_acc`) 會最佳。請透過 `for` loop 或 `lapply()` 去找出並回傳表現最佳的分類器，並將此分類器儲存於變數 `best_model`
+(這題在運算時會花上一些時間)
+
+```{r}
+source("svc.R")
+docs_df <- readRDS("samesex_marriage.rds")
+lsa_dims <- c(10, 25, 50, 75)
+
+# Write your code here
+```
+
+
+```{r}
+###### Do not modify the code below ######
+best_model
+# Should print out:
+#> $model
+#> 
+#> Call:
+#> best.tune(method = svm, train.x = topic ~ ., data = d_train, ranges = list(cost = seq(0.01, 
+#>     5, by = 0.05)), kernel = "linear")
+#> 
+#> 
+#> Parameters:
+#>    SVM-Type:  C-classification 
+#>  SVM-Kernel:  linear 
+#>        cost:  2.41 
+#> 
+#> Number of Support Vectors:  27
+#> 
+#> 
+#> $train_acc
+#> [1] 0.9
+#> 
+#> $test_acc
+#> [1] 0.7541667
+#> 
+#> $nd
+#> [1] 25
+```
+
+
+[^svm]: 關於 `svm_classifer_train()` 裡面的程式碼在做什麼事情，有興趣的同學可以去搜尋 Support Vector Machine 的相關說明，例如 <https://rpubs.com/skydome20/R-Note14-SVM-SVR>。
