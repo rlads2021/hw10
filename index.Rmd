@@ -108,7 +108,7 @@ LSA Dimensions & Classification (60 分)
     - `docs_df`: Document data frame。在此我們使用 `samesex_marriage.rds`
     - `dtm`: 由 `docs_df` 的語料製作而成的 document term matrix。
              在此我們使用上方的 `q_dfm`
-    - `nd`: LSA 模型設置的維度 `nd`。在此我們使用 `15`
+    - `nd`: LSA 模型設置的維度 `nd`
 
 2. `svm_classifer_train()` 回傳的是一個 list，裡面有 4 個元素 (見下方範例)：
     - `$model`: 分類器模型
